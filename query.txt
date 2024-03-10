@@ -1,0 +1,139 @@
+1. truy vấn check đăng nhập
+db.NhanVien.aggregate(
+{
+	$match:{'TaiKhoan.TenNguoiDung':'vanhieu', 'TaiKhoan.MatKhau':'vanhieu'}
+});
+2. truy vấn thêm nhân vien
+db.NhanVien.insertOne({
+	"MaNV": "NV005",
+	"HoTen": "Huỳnh Như",
+	"NgaySinh": new Date("2002-03-01"),
+	"SDT": "1249855",
+	"NoiSong": "TP.HCM",
+	"TaiKhoan":{
+		"MatKhau":"huynhnhu",
+		"Quyen":"NV",
+		"TenNguoiDung":["huynhnhu","012844"]
+  }
+});
+3. truy vấn thêm hợp đồng
+db.HDBH.insertOne({
+	"MaHopDong": "HD000099",
+  "ThongTinKhachHang": {
+    "MaTTKH": "TTKH0005",
+    "TenNguoiMua": "Nguyễn Văn Vinh",
+    "TenNguoiBaoHiem": "Nguyễn Văn Vinh",
+    "GioiTinh": "Nam",
+    "NgaySinh": new Date("2003-02-03"),
+    "NganhNghe": "Sinh Viên",
+    "NoiSinh": "TP.HCM"
+  },
+  "SanPhamBH": [
+    {
+      "MaSP": "SP0001",
+      "TenSanPham": "Manulife - Cuộc sống tươi đẹp",
+      "ThoiHanBH": 69,
+      "MucThamDinh": "Chuan",
+      "SoTienBH": 300000000,
+      "PhiDinhKy": 24500000
+    },
+    {
+      "MaSP": "SP0002",
+      "TenSanPham": "Manulife - Sống khỏe sống vui",
+      "ThoiHanBH": 50,
+      "MucThamDinh": "Chuan",
+      "SoTienBH": 50000000,
+      "PhiDinhKy": 1000000
+    }
+  ],
+  "TrangThaiHopDong": true,
+  "TongPhiSanPham": 25500000,
+  "PhiGiamHopDong": 1500000,
+  "TongPhiBHDinhKy": 24000000,
+  "NgayKyHopDong": new Date("2023-10-20")
+})
+4. truy vấn xóa hợp đồng:
+db.HDBH.deleteOne({"MaHopDong":"HD000099"})
+5. truy vấn xóa nhân viên:
+db.NhanVien.deleteOne({"MaNV":"NV04"})
+6. truy vấn lấy khách hàng mua nhiều sản phẩm bảo hiểm nhất 
+db.HDBH.aggregate([
+  {
+    $project: {
+      'ThongTinKhachHang': 1,
+      sl: { $size: '$SanPhamBH' }
+    }
+  },
+  {
+    $sort: { sl: -1 } // Sắp xếp theo sl giảm dần
+  },
+  {
+    $limit: 1 // Giới hạn kết quả chỉ lấy bản ghi đầu tiên (có sl lớn nhất)
+  }
+]);
+7. truy vấn đếm số khách hàng mua theo loại sản phẩm
+db.HDBH.aggregate([{$unwind:'$SanPhamBH'},{$group:{_id:"$SanPhamBH.MaSP", "TenSanPham":{$first:"$SanPhamBH.TenSanPham"}, SLKH_Mua:{$sum:1}}},{$project:{"_id":0}}])
+8. truy vấn sản phẩm bảo hiểm được nhiều khách mua nhất
+db.HDBH.aggregate([
+  {
+    $unwind: '$SanPhamBH'
+  },
+  {
+    $group: {
+      _id: "$SanPhamBH.MaSP",
+      "TenSanPham": { $first: "$SanPhamBH.TenSanPham" },
+      SLKH_Mua: { $sum: 1 }
+    }
+  },
+  {
+    $project: { "_id": 0 }
+  },
+  {
+    $sort: { SLKH_Mua: -1 } // Sắp xếp theo SLKH_Mua giảm dần
+  },
+  {
+    $limit: 1 // Giới hạn kết quả chỉ lấy bản ghi đầu tiên (có SLKH_Mua lớn nhất)
+  }
+]);
+9. truy vấn lấy danh sách khách hàng theo ngành nghề:
+db.HDBH.aggregate([{$match:{$or:[{'ThongTinKhachHang.NganhNghe':'Sinh Viên'},{'ThongTinKhachHang.NganhNghe':'Học Sinh'}]}},{$project:{'ThongTinKhachHang.MaTTKH':1, 'ThongTinKhachHang.TenNguoiMua': 1, _id: 0}}])
+10. truy vấn nhóm ngành nghề khách hàng và đưa khách hàng vào mảng
+db.HDBH.aggregate([
+  {
+$group: {
+      _id: "$ThongTinKhachHang.NganhNghe", // Nhóm theo ngành nghề
+      KhachHang: {
+        $push: {
+          MaTTKH: "$ThongTinKhachHang.MaTTKH",
+          TenNguoiMua: "$ThongTinKhachHang.TenNguoiMua",
+          TenNguoiBaoHiem: "$ThongTinKhachHang.TenNguoiBaoHiem",
+          GioiTinh: "$ThongTinKhachHang.GioiTinh",
+          NgaySinh: "$ThongTinKhachHang.NgaySinh",
+          NoiSinh: "$ThongTinKhachHang.NoiSinh"
+        }
+      }
+    }
+  }
+]);
+11. tổng chi phí định kỳ của tất cả hợp đồng:
+ db.HDBH.aggregate({$group:{_id:null, total:{$sum:'$TongPhiBHDinhKy'}}})
+12. doanh thu bán hàng của từng sản phẩm bảo hiểm:
+db.HDBH.aggregate({$unwind:'$SanPhamBH'},{$group:{_id:'$SanPhamBH',SoHopDong:{$sum:1}, DoanhSo:{$sum:"$SanPhamBH.SoTienBH"}}})
+13. truy vấn lấy chi tiết nhân viên dựa vào MaNV
+db.NhanVien.find({"MaNV":"NV001"})
+14. truy vấn lấy chi tiết hợp đồng:
+db.HDBH.find({"MaHopDong":"HD0000001"})
+15. truy vấn tìm hợp đồng theo TenNguoiMua có chứa chuỗi bất kỳ mình truyền vào:
+db.HDBH.aggregate([
+  {
+    $match: {
+      $expr: {
+        $regexMatch: {
+          input: "$ThongTinKhachHang.TenNguoiMua",
+          regex: "chuoi_muon_tim",
+          options: "i" // Tùy chọn "i" để không phân biệt hoa thường
+        }
+      }
+    }
+  }
+]);
